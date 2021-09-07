@@ -21,6 +21,8 @@
 @property (nonatomic,strong) NSMutableArray *colorArr;     //记录每个柱子的yanse
 @property (nonatomic,strong) UIButton *clearButton;        //清空柱子button
 @property (nonatomic,strong) UIButton *addButton;          //添加柱子button
+@property (nonatomic,strong) UIButton *syncButton;         //同步柱子button
+@property (nonatomic,assign) BOOL isSync;                  //是否正在同步
 @property (nonatomic, weak) NWRTDemoMainTopView *topView;     //显示柱状图view
 
 
@@ -61,15 +63,23 @@
     [self.view addSubview:topView];
     
     _clearButton = [UIButton buttonWithType:UIButtonTypeRoundedRect] ;
-    _clearButton.frame = CGRectMake(160, 500, 100, 30) ;
+    _clearButton.frame = CGRectMake(140, 500, 80, 30) ;
     [_clearButton setTitle:@"Clear" forState:UIControlStateNormal] ;
     _clearButton.backgroundColor = [UIColor colorWithRed:108/255.0 green:203/255.0 blue:247/255.0 alpha:1] ;
     [_clearButton setTitleColor: [UIColor whiteColor ] forState:UIControlStateNormal] ;
     [_clearButton addTarget:self action:@selector(clearPillar) forControlEvents:UIControlEventTouchDown];
     [self.view addSubview:_clearButton] ;
     
+    _syncButton = [UIButton buttonWithType:UIButtonTypeRoundedRect] ;
+    _syncButton.frame = CGRectMake(230, 500, 80, 30) ;
+    [_syncButton setTitle:@"Sync" forState:UIControlStateNormal] ;
+    _syncButton.backgroundColor = [UIColor colorWithRed:108/255.0 green:203/255.0 blue:247/255.0 alpha:1] ;
+    [_syncButton setTitleColor: [UIColor whiteColor ] forState:UIControlStateNormal] ;
+    [_syncButton addTarget:self action:@selector(syncPillar) forControlEvents:UIControlEventTouchDown];
+    [self.view addSubview:_syncButton] ;
+    
     _addButton = [UIButton buttonWithType:UIButtonTypeRoundedRect] ;
-    _addButton.frame = CGRectMake(50, 500, 100, 30) ;
+    _addButton.frame = CGRectMake(50, 500, 80, 30) ;
     [_addButton setTitle:@"Add" forState:UIControlStateNormal] ;
     _addButton.backgroundColor = [UIColor colorWithRed:108/255.0 green:203/255.0 blue:247/255.0 alpha:1] ;
     [_addButton setTitleColor: [UIColor whiteColor ] forState:UIControlStateNormal] ;
@@ -216,15 +226,25 @@
     if(self.heightArr.count >= 10){
         return;
     }
-    [self sendData:@"add"];
+    [self.heightArr addObject:@1];
+    
+    [self sendData:self.heightArr];
+}
+
+-(void)syncPillar{
+    self.isSync = YES;
+    [self sendDataString:@"sync"];
 }
 
 -(void)clearPillar{
-    [self sendData:@"clear"];
+    [self.heightArr removeAllObjects];
+    [self sendData:self.heightArr];
 }
 
 - (void)clickPillarAtIndex:(int)index{
-    [self sendData:[NSString stringWithFormat:@"%d",index]];
+    NSInteger height = [[self.heightArr objectAtIndex:index] integerValue] + 1;
+    self.heightArr[index] = [NSNumber numberWithInteger:height];
+    [self sendData:self.heightArr];
 }
 
 - (void)refreshView
@@ -235,20 +255,15 @@
 - (void)handleMessage:(NSData *)data onTopic:(NSString *)topic retained:(BOOL)retained {
     NSLog(@"------------->>%@",topic);
     NSString *dataString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    NSLog(@"%@",dataString);
-    if([dataString isEqualToString:@"add"]){
-        [self.heightArr addObject:@1];
-//        [self.colorArr addObject:HWRandomColor];
-    }else if([dataString isEqualToString:@"clear"])
-    {
-        [self.heightArr removeAllObjects];
-//        [self.colorArr removeAllObjects];
+    if(dataString && [dataString isEqualToString:@"sync"]){
+        if(!self.isSync){
+            [self sendData:self.heightArr];
+        }
     }else{
-        NSInteger index = [dataString integerValue];
-        int height = [self.heightArr[index] intValue];
-        self.heightArr[index] = @(height + 1);
+        NSArray *dataArr = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil];
+        self.heightArr = dataArr;
+        [self refreshView];
     }
-    [self refreshView];
 }
 
 - (void)connect {
@@ -256,15 +271,26 @@
 }
 
 - (void)disConnect {
-    
     [self.manager disconnectWithDisconnectHandler:nil];
     self.manager.subscriptions = @{};
-    
 }
 
 //添加柱子
-- (void)sendData:(NSString *)data{
-    [self.manager sendData:[data dataUsingEncoding:NSUTF8StringEncoding]
+- (void)sendData:(NSArray *)data{
+    NSData *sendData = [NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:nil];
+    
+    [self.manager sendData:sendData
+                     topic:[NSString stringWithFormat:@"%@/%@",
+                            self.rootTopic,
+                            @"IOS"]//此处设置多级子topic
+                       qos:self.qos
+                    retain:FALSE];
+}
+
+//同步数据
+- (void)sendDataString:(NSString *)data{
+    NSData *sendData = [data dataUsingEncoding:NSUTF8StringEncoding];
+    [self.manager sendData:sendData
                      topic:[NSString stringWithFormat:@"%@/%@",
                             self.rootTopic,
                             @"IOS"]//此处设置多级子topic
