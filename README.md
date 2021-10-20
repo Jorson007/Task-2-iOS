@@ -5,3 +5,5 @@
 2.双击NWRTChartDemo.xcworkspace文件，用xcode打开工程，运行代码进入主页面；
 3.点击Add按钮可添加柱状图，点击Clear按钮可清空图表；
 3.点击对应的每一根柱子都会增加柱子的高度，左侧y轴对应的就是柱子的点击次数；
+
+注：NWRTMainViewController 类的 __loadConfiguation方法里访问环信消息云的appid、username、password请自行前往环信官网注册使用，参考文档：https://docs-im.easemob.com/mqtt/qsiossdk
